@@ -11,11 +11,12 @@ contract StagePercentageStep is MultiOwners {
 
     string public name;
     uint256 public tokenPriceInETH;
-    uint256 public possibleCapInETH;
-    uint256 public possibleCapInUSD;
-    uint256 public possibleCapInTokens;
+    uint256 public mintCapInETH;
+    uint256 public mintCapInUSD;
+    uint256 public mintCapInTokens;
+    uint256 public hardCapInTokens;
     uint256 public mintedTokens;
-    uint256 public totalETH;
+    uint256 public totalWei;
     uint256 public ethPriceInUSD;
     
 
@@ -37,15 +38,21 @@ contract StagePercentageStep is MultiOwners {
         name = _name;
     }
     
+    function totalEther() public constant returns(uint256) {
+        return totalWei.div(1e18);
+    }
+
     function registerRound(uint256 priceDiscount, uint256 weightPercentage) internal {
         uint256 windowInETH;
         uint256 windowInTokens;
         uint256 accInETH = 0;
         uint256 accInTokens = 0;
+        uint256 priceInETH;
         
         
-        windowInETH = possibleCapInETH.mul(weightPercentage).div(100);
-        windowInTokens = windowInETH.mul(1e18).div(tokenPriceInETH.mul(100-priceDiscount));
+        priceInETH = tokenPriceInETH.mul(100-priceDiscount).div(100);
+        windowInETH = mintCapInETH.mul(weightPercentage).div(100);
+        windowInTokens = windowInETH.mul(1e18).div(priceInETH);
 
         if(rounds.length > 0) {
             accInTokens = accInTokens.add(rounds[rounds.length-1].nextAccInTokens);
@@ -61,9 +68,10 @@ contract StagePercentageStep is MultiOwners {
             nextAccInTokens: accInTokens + windowInTokens,
             weightPercentage: weightPercentage,
             discount: priceDiscount,
-            priceInETH: tokenPriceInETH.mul(100-priceDiscount).div(100)
+            priceInETH: priceInETH
         }));
-        possibleCapInTokens = possibleCapInTokens.add(windowInTokens.mul(120).div(100));
+        mintCapInTokens = mintCapInTokens.add(windowInTokens);
+        hardCapInTokens = mintCapInTokens.mul(120).div(100);
     }
     
     /*
@@ -76,12 +84,12 @@ contract StagePercentageStep is MultiOwners {
     function calcAmount(
         uint256 amount,
         uint256 _totalEthers
-    ) public returns (uint256, uint256) {
+    ) public constant returns (uint256, uint256) {
         uint256 estimate;
         // uint256 odd;
         Round memory round;
         
-        for(uint256 i;i<rounds.length;i++) {
+        for(uint256 i; i<rounds.length; i++) {
             round = rounds[i];
 
             if(!(_totalEthers >= round.accInETH && _totalEthers < round.nextAccInETH)) {
@@ -157,8 +165,8 @@ contract SessiaCrowdsale is StagePercentageStep, Haltable {
         endTime = startTime.add(periodInDays);
 
         tokenPriceInETH = 1e15; // 0.001 ETH
-        possibleCapInUSD = 2000000e2;
-        possibleCapInETH = possibleCapInUSD.mul(1e18).div(ethPriceInUSD);
+        mintCapInUSD = 2000000e2;
+        mintCapInETH = mintCapInUSD.mul(1e18).div(ethPriceInUSD);
     
         registerRound({priceDiscount: 50, weightPercentage: 10});
         registerRound({priceDiscount: 40, weightPercentage: 20});
@@ -230,7 +238,7 @@ contract SessiaCrowdsale is StagePercentageStep, Haltable {
     function bonusMinting(address to, uint256 amount) stopInEmergency {
         require(msg.sender == bonusMintingAgent || isOwner());
         require(amount <= bonusAvailable);
-        require(token.totalSupply() + amount <= possibleCapInTokens);
+        require(token.totalSupply() + amount <= hardCapInTokens);
 
         bonusTotalSupply = bonusTotalSupply.add(amount);
         bonusAvailable = bonusAvailable.sub(amount);
@@ -250,15 +258,15 @@ contract SessiaCrowdsale is StagePercentageStep, Haltable {
         uint256 odd_ethers;
         uint256 ethers;
         
-        (amount, odd_ethers) = calcAmount(msg.value, totalETH);
+        (amount, odd_ethers) = calcAmount(msg.value, totalWei);
   
-        require(amount + token.totalSupply() <= possibleCapInTokens);
+        require(amount + token.totalSupply() <= mintCapInTokens);
 
         ethers = (msg.value.sub(odd_ethers));
 
         token.mint(contributor, amount); // fail if minting is finished
         TokenPurchase(contributor, ethers, amount);
-        totalETH = totalETH.add(ethers);
+        totalWei = totalWei.add(ethers);
 
         if(odd_ethers > 0) {
             require(odd_ethers < msg.value);
@@ -271,8 +279,12 @@ contract SessiaCrowdsale is StagePercentageStep, Haltable {
     }
 
     function finishCrowdsale() onlyOwner public {
-        require(now > endTime || possibleCapInTokens == token.totalSupply());
+        require(now > endTime || mintCapInTokens == token.totalSupply());
         require(!token.mintingFinished());
+
+        if(bonusAvailable > 0) {
+            bonusMinting(wallet, bonusAvailable);
+        }
         token.finishMinting();
     }
 
