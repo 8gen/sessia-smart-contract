@@ -160,6 +160,7 @@ contract SessiaCrowdsale is StagePercentageStep, Haltable {
 
         token = new SessiaToken();
         bonusMintingAgent = _bonusMintingAgent;
+        wallet = _wallet;
 
         startTime = _startTime;
         endTime = startTime.add(periodInDays);
@@ -174,8 +175,7 @@ contract SessiaCrowdsale is StagePercentageStep, Haltable {
         registerRound({priceDiscount: 30, weightPercentage: 40});
     
         require(bonusMintingAgent != 0);
-        require(_wallet != 0x0);
-        wallet = _wallet;
+        require(wallet != 0x0);
     }
 
     function withinPeriod() constant public returns (bool) {
