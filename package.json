@@ -31,7 +31,9 @@
         "web3-provider-engine": "^13.2.9",
         "zeppelin-solidity": "^1.3.0"
     },
-    "devDependencies": {},
+    "devDependencies": {
+        "eslint-plugin-mocha": "^5.0.0"
+    },
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },

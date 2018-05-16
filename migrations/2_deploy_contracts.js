@@ -6,8 +6,7 @@ require('babel-register')({
     ignore: /node_modules\/(?!zeppelin-solidity)/, 
  });
 
-var McFlyCrowdsale = artifacts.require("./McFlyCrowdsale.sol");
-var moment = require('moment');
+var SessiaCrowdsale = artifacts.require("./SessiaCrowdsale.sol");
 
 module.exports = async function(deployer, network, accounts) {
 };
